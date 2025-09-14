@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flappy Bird Neon</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(45deg, #0a0a0a, #1a0033, #330066);
+            font-family: 'Orbitron', monospace;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 400px;
+            height: 600px;
+            background: linear-gradient(180deg, #000011, #001122, #002244);
+            border: 2px solid #00ffff;
+            box-shadow: 0 0 30px #00ffff, inset 0 0 30px rgba(0, 255, 255, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            background: transparent;
+        }
+
+        .neon-text {
+            color: #00ffff;
+            text-shadow: 0 0 5px #00ffff, 0 0 10px #00ffff, 0 0 15px #00ffff;
+            font-weight: bold;
+        }
+
+        .game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 30px;
+            border-radius: 15px;
+            border: 2px solid #ff00ff;
+            box-shadow: 0 0 30px #ff00ff;
+            z-index: 100;
+        }
+
+        .game-over h1 {
+            color: #ff00ff;
+            text-shadow: 0 0 10px #ff00ff, 0 0 20px #ff00ff, 0 0 30px #ff00ff;
+            font-size: 2em;
+            margin-bottom: 20px;
+            animation: pulse 1s infinite;
+        }
+
+        .game-over p {
+            color: #00ffff;
+            text-shadow: 0 0 5px #00ffff;
+            margin-bottom: 20px;
+            font-size: 1.2em;
+        }
+
+        .restart-btn {
+            background: linear-gradient(45deg, #ff00ff, #00ffff);
+            color: black;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.2em;
+            font-weight: bold;
+            border-radius: 25px;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(255, 0, 255, 0.5);
+            transition: all 0.3s ease;
+        }
+
+        .restart-btn:hover {
+            box-shadow: 0 0 30px rgba(255, 0, 255, 0.8);
+            transform: scale(1.1);
+        }
+
+        .score {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+            font-size: 1.5em;
+            font-weight: bold;
+            z-index: 10;
+        }
+
+        .speed-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: #ff00ff;
+            text-shadow: 0 0 10px #ff00ff;
+            font-size: 1em;
+            font-weight: bold;
+            z-index: 10;
+        }
+
+        .instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ff00ff;
+            text-shadow: 0 0 5px #ff00ff;
+            text-align: center;
+            font-size: 0.9em;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        @keyframes neonGlow {
+            0%, 100% { filter: brightness(1) saturate(1); }
+            50% { filter: brightness(1.5) saturate(1.5); }
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+        <div class="score" id="score">Score: 0</div>
+        <div class="speed-indicator" id="speed">Velocidade: 1x</div>
+        <div class="instructions" id="instructions">
+            Clique ou pressione ESPAÇO para voar
+        </div>
+        <div class="game-over hidden" id="gameOver">
+            <h1>GAME OVER</h1>
+            <p id="finalScore">Score: 0</p>
+            <button class="restart-btn" onclick="restartGame()">JOGAR NOVAMENTE</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const speedElement = document.getElementById('speed');
+        const gameOverScreen = document.getElementById('gameOver');
+        const finalScoreElement = document.getElementById('finalScore');
+        const instructionsElement = document.getElementById('instructions');
+
+        // Game variables
+        let bird = {
+            x: 80,
+            y: 250,
+            width: 20,
+            height: 20,
+            velocity: 0,
+            gravity: 0.5,
+            jump: -8
+        };
+
+        let pipes = [];
+        let score = 0;
+        let gameStarted = false;
+        let gameOver = false;
+        let pipeGap = 120;
+        let pipeWidth = 40;
+        let frameCount = 0;
+        let gameSpeed = 2; // Velocidade inicial
+        let maxSpeed = 8; // Velocidade máxima
+
+        // Audio variables
+        let customMusic;
+        let audioContext;
+        let gameOverSound;
+
+        function initAudio() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            initCustomMusic();
+            createGameOverSound();
+        }
+
+        function initCustomMusic() {
+            
+            
+            try {
+                // Tente com o link do Google Drive corrigido
+                customMusic = new Audio("mp3.mp3");
+                customMusic.loop = true;
+                customMusic.volume = 0.5;
+                
+                // Adiciona evento para detectar erro no carregamento
+                customMusic.addEventListener('error', function() {
+                    console.log('Erro ao carregar música personalizada. Usando música padrão.');
+                    customMusic = null;
+                });
+                
+                customMusic.addEventListener('canplaythrough', function() {
+                    console.log('Música personalizada carregada com sucesso!');
+                });
+                
+            } catch (error) {
+                console.log('Erro ao inicializar música:', error);
+                customMusic = null;
+            }
+        }
+
+        function playCustomMusic() {
+            if (customMusic) {
+                try {
+                    customMusic.currentTime = 0;
+                    customMusic.play().catch(function(error) {
+                        console.log('Erro ao tocar música:', error);
+                    });
+                } catch (error) {
+                    console.log('Erro ao tocar música:', error);
+                }
+            }
+        }
+
+        function stopCustomMusic() {
+            if (customMusic) {
+                try {
+                    customMusic.pause();
+                    customMusic.currentTime = 0;
+                } catch (error) {
+                    console.log('Erro ao parar música:', error);
+                }
+            }
+        }
+
+        function createGameOverSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 1);
+            
+            oscillator.type = 'sawtooth';
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1);
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            gameOverSound = { oscillator, gainNode };
+        }
+
+        function playGameOverSound() {
+            if (gameOverSound && audioContext) {
+                gameOverSound.oscillator.start();
+                gameOverSound.oscillator.stop(audioContext.currentTime + 1);
+            }
+            createGameOverSound(); // Create new sound for next time
+        }
+
+        function drawBird() {
+            ctx.save();
+            
+            // Neon glow effect
+            ctx.shadowColor = '#00ffff';
+            ctx.shadowBlur = 15;
+            ctx.fillStyle = '#00ffff';
+            
+            // Draw bird body
+            ctx.fillRect(bird.x, bird.y, bird.width, bird.height);
+            
+            // Add inner glow
+            ctx.shadowBlur = 5;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(bird.x + 3, bird.y + 3, bird.width - 6, bird.height - 6);
+            
+            ctx.restore();
+        }
+
+        function drawPipes() {
+            pipes.forEach(pipe => {
+                ctx.save();
+                
+                // Top pipe
+                ctx.shadowColor = '#ff00ff';
+                ctx.shadowBlur = 20;
+                ctx.fillStyle = '#ff00ff';
+                ctx.fillRect(pipe.x, 0, pipeWidth, pipe.top);
+                
+                // Top pipe inner glow
+                ctx.shadowBlur = 5;
+                ctx.fillStyle = '#ffaaff';
+                ctx.fillRect(pipe.x + 5, 0, pipeWidth - 10, pipe.top);
+                
+                // Bottom pipe
+                ctx.shadowColor = '#ff00ff';
+                ctx.shadowBlur = 20;
+                ctx.fillStyle = '#ff00ff';
+                ctx.fillRect(pipe.x, pipe.bottom, pipeWidth, canvas.height - pipe.bottom);
+                
+                // Bottom pipe inner glow
+                ctx.shadowBlur = 5;
+                ctx.fillStyle = '#ffaaff';
+                ctx.fillRect(pipe.x + 5, pipe.bottom, pipeWidth - 10, canvas.height - pipe.bottom);
+                
+                ctx.restore();
+            });
+        }
+
+        function drawBackground() {
+            // Animated background
+            ctx.save();
+            
+            // Create gradient
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, `rgba(0, 0, ${Math.sin(frameCount * 0.01) * 50 + 100}, 0.1)`);
+            gradient.addColorStop(1, `rgba(${Math.sin(frameCount * 0.005) * 50 + 50}, 0, 100, 0.1)`);
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Add moving stars
+            ctx.fillStyle = '#ffffff';
+            for (let i = 0; i < 20; i++) {
+                const x = (frameCount * (i + 1) * 0.5) % (canvas.width + 10);
+                const y = (i * 30) % canvas.height;
+                ctx.fillRect(x, y, 2, 2);
+            }
+            
+            ctx.restore();
+        }
+
+        function createPipe() {
+            const topHeight = Math.random() * (canvas.height - pipeGap - 100) + 50;
+            pipes.push({
+                x: canvas.width,
+                top: topHeight,
+                bottom: topHeight + pipeGap,
+                passed: false
+            });
+        }
+
+        function updateGame() {
+            if (gameOver) return;
+
+            frameCount++;
+
+            // Update bird
+            if (gameStarted) {
+                bird.velocity += bird.gravity;
+                bird.y += bird.velocity;
+                
+                // Check boundaries
+                if (bird.y <= 0 || bird.y + bird.height >= canvas.height) {
+                    endGame();
+                    return;
+                }
+            }
+
+            // Create pipes
+            if (frameCount % 90 === 0 && gameStarted) {
+                createPipe();
+            }
+
+            // Update pipes
+            pipes.forEach((pipe, index) => {
+                if (gameStarted) {
+                    pipe.x -= gameSpeed; // Usa velocidade variável
+                }
+
+                // Check collision
+                if (bird.x < pipe.x + pipeWidth &&
+                    bird.x + bird.width > pipe.x &&
+                    (bird.y < pipe.top || bird.y + bird.height > pipe.bottom)) {
+                    endGame();
+                    return;
+                }
+
+                // Check score
+                if (!pipe.passed && bird.x > pipe.x + pipeWidth) {
+                    pipe.passed = true;
+                    score++;
+                    scoreElement.textContent = `Score: ${score}`;
+                    
+                    // Aumenta velocidade gradativamente a cada 3 pontos
+                    if (score % 3 === 0 && gameSpeed < maxSpeed) {
+                        gameSpeed += 0.3;
+                        updateSpeedDisplay();
+                    }
+                }
+
+                // Remove off-screen pipes
+                if (pipe.x + pipeWidth < 0) {
+                    pipes.splice(index, 1);
+                }
+            });
+        }
+
+        function updateSpeedDisplay() {
+            const speedMultiplier = (gameSpeed / 2).toFixed(1);
+            speedElement.textContent = `Velocidade: ${speedMultiplier}x`;
+        }
+
+        function jump() {
+            if (!gameStarted) {
+                gameStarted = true;
+                instructionsElement.classList.add('hidden');
+                initAudio();
+                playCustomMusic(); // Toca sua música personalizada
+            }
+            
+            if (!gameOver) {
+                bird.velocity = bird.jump;
+            }
+        }
+
+        function endGame() {
+            gameOver = true;
+            stopCustomMusic(); // Para sua música
+            
+            setTimeout(() => {
+                if (audioContext) {
+                    playGameOverSound();
+                }
+            }, 100);
+            
+            finalScoreElement.textContent = `Score: ${score}`;
+            gameOverScreen.classList.remove('hidden');
+        }
+
+        function restartGame() {
+            bird.y = 250;
+            bird.velocity = 0;
+            pipes = [];
+            score = 0;
+            gameStarted = false;
+            gameOver = false;
+            frameCount = 0;
+            gameSpeed = 2; // Reset da velocidade
+            
+            scoreElement.textContent = 'Score: 0';
+            speedElement.textContent = 'Velocidade: 1x';
+            gameOverScreen.classList.add('hidden');
+            instructionsElement.classList.remove('hidden');
+            
+            stopCustomMusic(); // Para sua música
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            drawBackground();
+            drawPipes();
+            drawBird();
+            updateGame();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Event listeners
+        canvas.addEventListener('click', jump);
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                jump();
+            }
+        });
+
+        // Start game loop
+        gameLoop();
+    </script>
+</body>
+</html>
